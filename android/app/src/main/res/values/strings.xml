@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Monitors which app is in the foreground to enforce time limits. When a monitored app exceeds its time limit, App Limiter will redirect you to the home screen and show a blocking overlay.</string>
+</resources>
