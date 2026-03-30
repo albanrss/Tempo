@@ -112,7 +112,10 @@ class AppCache {
   }
 
   static Future<List<AppInfo>> _fetchAndCacheApps() async {
-    final apps = await InstalledApps.getInstalledApps(withIcon: true);
+    final apps = await InstalledApps.getInstalledApps(
+      withIcon: true,
+      excludeSystemApps: false,
+    );
     _saveToDisk(apps);
     return apps;
   }
