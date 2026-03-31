@@ -14,28 +14,19 @@ class AppTheme {
   static final ThemeData theme = ThemeData(
     colorScheme: _colorScheme,
     scaffoldBackgroundColor: Colors.white,
-    textTheme: const TextTheme().apply(
-      bodyColor: Colors.black,
-      displayColor: Colors.black,
-    ),
+    textTheme: const TextTheme().apply(bodyColor: Colors.black, displayColor: Colors.black),
     iconTheme: const IconThemeData(color: Colors.black),
-    cardTheme: const CardThemeData(
-      color: Colors.white,
-      surfaceTintColor: Colors.transparent,
-    ),
-    listTileTheme: const ListTileThemeData(
-      textColor: Colors.black,
-      iconColor: Colors.black,
-    ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: Colors.black,
-    ),
+    cardTheme: const CardThemeData(color: Colors.white, surfaceTintColor: Colors.transparent),
+    listTileTheme: const ListTileThemeData(textColor: Colors.black, iconColor: Colors.black),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(color: Colors.black),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(foregroundColor: Colors.black),
     ),
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.white,
       foregroundColor: Colors.black,
+      surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 0,
       systemOverlayStyle: SystemUiOverlayStyle.dark,
     ),
   );
