@@ -11,6 +11,7 @@ import 'package:tempo/services/app_cache.dart';
 import 'package:tempo/services/password_service.dart';
 import 'package:tempo/screens/app_limit_screen.dart';
 import 'package:tempo/screens/pin_screen.dart';
+import 'package:tempo/screens/active_limits_screen.dart';
 
 class AppListerScreen extends StatefulWidget {
   const AppListerScreen({super.key});
@@ -19,8 +20,7 @@ class AppListerScreen extends StatefulWidget {
   State<AppListerScreen> createState() => _AppListerScreenState();
 }
 
-class _AppListerScreenState extends State<AppListerScreen>
-    with WidgetsBindingObserver {
+class _AppListerScreenState extends State<AppListerScreen> with WidgetsBindingObserver {
   List<AppInfo> _apps = [];
   List<AppInfo> _filteredApps = [];
   Set<String> _appsWithLimits = {};
@@ -85,12 +85,11 @@ class _AppListerScreenState extends State<AppListerScreen>
       });
     }
   }
+
   Future<void> _loadAppsWithLimits() async {
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs.getKeys();
-    final limitKeys = keys.where(
-      (k) => k.startsWith(StorageKeys.timeLimitPrefix),
-    );
+    final limitKeys = keys.where((k) => k.startsWith(StorageKeys.timeLimitPrefix));
     final limits = <String, int>{};
     for (final key in limitKeys) {
       final packageName = key.replaceFirst(StorageKeys.timeLimitPrefix, '');
@@ -130,8 +129,7 @@ class _AppListerScreenState extends State<AppListerScreen>
   Future<void> _checkNotificationPermission() async {
     final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
     final androidPlugin = flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     final enabled = await androidPlugin?.areNotificationsEnabled() ?? false;
     if (mounted) {
       setState(() {
@@ -143,8 +141,7 @@ class _AppListerScreenState extends State<AppListerScreen>
   Future<void> _requestNotificationPermission() async {
     final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
     final androidPlugin = flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.requestNotificationsPermission();
   }
 
@@ -159,6 +156,7 @@ class _AppListerScreenState extends State<AppListerScreen>
       _getInstalledApps();
     }
   }
+
   Future<void> _getInstalledApps() async {
     if (_apps.isNotEmpty) {
       _refreshAppsInBackground();
@@ -230,10 +228,7 @@ class _AppListerScreenState extends State<AppListerScreen>
 
     final prefs = await SharedPreferences.getInstance();
     final futures = toStore.map(
-      (app) => prefs.setString(
-        '${StorageKeys.appNamePrefix}${app.packageName}',
-        app.name,
-      ),
+      (app) => prefs.setString('${StorageKeys.appNamePrefix}${app.packageName}', app.name),
     );
     await Future.wait(futures);
     if (mounted) {
@@ -253,20 +248,14 @@ class _AppListerScreenState extends State<AppListerScreen>
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
       child: ListTile(
-        leading: Icon(
-          granted ? Icons.check_circle_outline : Icons.warning_amber_rounded,
-        ),
+        leading: Icon(granted ? Icons.check_circle_outline : Icons.warning_amber_rounded),
         title: Text(title),
         subtitle: Text(granted ? Strings.permissionGranted : description),
-        trailing: granted
-            ? null
-            : TextButton(
-                onPressed: onAction,
-                child: Text(actionLabel),
-              ),
+        trailing: granted ? null : TextButton(onPressed: onAction, child: Text(actionLabel)),
       ),
     );
   }
+
   void _filterApps(String _) {
     setState(() {
       _applyFilter();
@@ -282,24 +271,39 @@ class _AppListerScreenState extends State<AppListerScreen>
           children: [
             const SizedBox(height: 64),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Stack(
+              alignment: Alignment.center,
               children: [
-                Image.asset(
-                  'assets/flower.png',
-                  height: 80,
-                  fit: BoxFit.contain,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        if (Navigator.canPop(context)) {
+                          Navigator.pop(context);
+                        } else {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ActiveLimitsScreen(),
+                            ),
+                          );
+                        }
+                      },
+                      child: Image.asset('assets/flower.png', height: 80, fit: BoxFit.contain),
+                    ),
+                  ],
                 ),
               ],
             ),
 
             const SizedBox(height: 64),
 
-            if (
-              !_isCheckingPermissions && (
-                !_permissionGranted || !_accessibilityEnabled || !_notificationsEnabled || !_pinSet
-              )
-            ) ...[
+            if (!_isCheckingPermissions &&
+                (!_permissionGranted ||
+                    !_accessibilityEnabled ||
+                    !_notificationsEnabled ||
+                    !_pinSet)) ...[
               const SizedBox(height: 16),
 
               _buildPermissionCard(
@@ -341,23 +345,18 @@ class _AppListerScreenState extends State<AppListerScreen>
 
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(Strings.permissionsSection,)
-                ],
+                children: [Text(Strings.permissionsSection)],
               ),
             ] else if (_apps.isNotEmpty) ...[
               Padding(
                 padding: const .symmetric(horizontal: 16),
                 child: SearchBar(
                   controller: _searchBarController,
-                  leading: Padding(
-                    padding: const .only(left: 8),
-                    child: Icon(Icons.search)
-                    ),
+                  leading: Padding(padding: const .only(left: 8), child: Icon(Icons.search)),
                   onChanged: _filterApps,
                   onSubmitted: _filterApps,
                   onTapOutside: (e) => FocusScope.of(context).unfocus(),
-                )
+                ),
               ),
 
               const SizedBox(height: 32),
@@ -380,20 +379,16 @@ class _AppListerScreenState extends State<AppListerScreen>
                           final hasLimit = _appsWithLimits.contains(app.packageName);
 
                           final isFirstWithoutLimit =
-                              (!hasLimit && 
-                              index > 0 && 
-                              _appsWithLimits.contains(
-                                _filteredApps[index - 1].packageName,
-                              ));
+                              (!hasLimit &&
+                              index > 0 &&
+                              _appsWithLimits.contains(_filteredApps[index - 1].packageName));
 
-                          final timeLimit = hasLimit
-                              ? _appTimeLimits[app.packageName]
-                              : null;
+                          final timeLimit = hasLimit ? _appTimeLimits[app.packageName] : null;
 
                           return Column(
                             key: ValueKey(app.packageName),
                             children: [
-                              if (isFirstWithoutLimit) ... [
+                              if (isFirstWithoutLimit) ...[
                                 const Padding(
                                   padding: EdgeInsets.symmetric(
                                     vertical: 8.0,
@@ -409,7 +404,7 @@ class _AppListerScreenState extends State<AppListerScreen>
                                     ? Image.memory(app.icon!, gaplessPlayback: true)
                                     : const Icon(Icons.apps),
                                 title: Text(app.name),
-                                trailing: hasLimit 
+                                trailing: hasLimit
                                     ? Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
@@ -452,17 +447,14 @@ class _AppListerScreenState extends State<AppListerScreen>
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.12),
-                            Colors.transparent,
-                          ],
+                          colors: [Colors.black.withValues(alpha: 0.12), Colors.transparent],
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ] else ... [
+            ] else ...[
               const Expanded(child: Center(child: CircularProgressIndicator())),
             ],
           ],
