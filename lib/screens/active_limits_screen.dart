@@ -23,13 +23,13 @@ class _ActiveLimitsScreenState extends State<ActiveLimitsScreen> {
     _loadLimits();
   }
 
-  Future<Map<String, int>> _getUsageInLastHour(Set<String> packages) async {
+  Future<Map<String, int>> _getUsageToday(Set<String> packages) async {
     final now = DateTime.now();
-    final oneHourAgo = now.subtract(const Duration(hours: 1));
+    final startOfDay = DateTime(now.year, now.month, now.day);
 
     final usageMap = <String, int>{};
     try {
-      final events = await UsageStats.queryEvents(oneHourAgo, now);
+      final events = await UsageStats.queryEvents(startOfDay, now);
 
       final lastForeground = <String, int>{};
 
@@ -64,7 +64,7 @@ class _ActiveLimitsScreenState extends State<ActiveLimitsScreen> {
       }
     } catch (_) {}
 
-    return usageMap.map((k, v) => MapEntry(k, (v / 60000).round()));
+    return usageMap.map((k, v) => MapEntry(k, v ~/ 60000));
   }
 
   Future<void> _loadLimits() async {
@@ -91,7 +91,7 @@ class _ActiveLimitsScreenState extends State<ActiveLimitsScreen> {
       limitsRaw[packageName] = minutes;
     }
 
-    final usageMap = await _getUsageInLastHour(packageNames);
+    final usageMap = await _getUsageToday(packageNames);
 
     final entries = <_LimitedAppEntry>[];
     for (final packageName in packageNames) {
