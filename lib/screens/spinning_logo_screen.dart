@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:tempo/screens/app_lister_screen.dart';
+import 'package:tempo/screens/active_limits_screen.dart';
 import 'package:tempo/services/app_cache.dart';
-import 'package:tempo/services/password_service.dart';
-import 'package:tempo/screens/pin_screen.dart';
 
 class SpinningLogoScreen extends StatefulWidget {
   const SpinningLogoScreen({super.key});
@@ -12,7 +10,8 @@ class SpinningLogoScreen extends StatefulWidget {
   State<SpinningLogoScreen> createState() => _SpinningLogoScreenState();
 }
 
-class _SpinningLogoScreenState extends State<SpinningLogoScreen> with TickerProviderStateMixin{
+class _SpinningLogoScreenState extends State<SpinningLogoScreen>
+    with TickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     duration: const Duration(seconds: 5),
     vsync: this,
@@ -35,37 +34,32 @@ class _SpinningLogoScreenState extends State<SpinningLogoScreen> with TickerProv
     super.dispose();
   }
 
-  void _goToAppLister() async {
-    final hasPin = await PasswordService.hasPin();
-    if (hasPin) {
-      if (!mounted) return;
-      final ok = await PinScreen.promptPin(context);
-      if (!ok) return;
-    }
-    if (!mounted) return;
-    Navigator.of(context).push(MaterialPageRoute(builder: (context) => AppListerScreen()));
+  void _goToLimits() {
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (context) => const ActiveLimitsScreen()));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
-        mainAxisAlignment: .center,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
-            mainAxisAlignment: .center,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                onPressed: _goToAppLister,
+                onPressed: _goToLimits,
                 icon: RotationTransition(
                   turns: _animation,
                   child: Image.asset("assets/flower.png", width: 150),
-                  )
                 ),
+              ),
             ],
-          )
+          ),
         ],
-      )
+      ),
     );
   }
 }
