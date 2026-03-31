@@ -98,35 +98,53 @@ class AppBlockerAccessibilityService : AccessibilityService() {
 
         if (!isLaunchableApp(packageName)) return
 
+        // Récupérer la vraie application au premier plan selon UsageStatsManager
+        // pour ignorer les overlays (ex: Digital Wellbeing, pubs superposées).
+        val realApp = getRealForegroundApp()
+        val appToCheck = if (realApp != null && realApp != packageName) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Fake window change: ignored $packageName, real app is $realApp")
+            realApp
+        } else {
+            packageName
+        }
+
         // Only track launchable apps as the current foreground app so that
         // background system services (e.g. GMS, SystemUI) cannot override it
         // and cause the periodic check to miss the user-facing app's limit.
-        currentForegroundApp = packageName
+        currentForegroundApp = appToCheck
 
-        if (BuildConfig.DEBUG) Log.d(TAG, "Window changed → $packageName (blocked=$blockedPackageName)")
+        if (BuildConfig.DEBUG) Log.d(TAG, "Window changed → $appToCheck (blocked=$blockedPackageName)")
 
         val currentBlocked = blockedPackageName
 
         // ── Active block + navigated elsewhere ──
-        if (currentBlocked != null && packageName != currentBlocked) {
-            if (isLauncher(packageName) || packageName == "com.android.settings") {
+        if (currentBlocked != null && appToCheck != currentBlocked) {
+            if (isLauncher(appToCheck) || appToCheck == "com.android.settings") {
                 if (BuildConfig.DEBUG) Log.d(TAG, "On launcher/settings while blocked — staying blocked")
                 return
             }
-            if (BuildConfig.DEBUG) Log.d(TAG, "Navigated to $packageName — clearing block")
+            if (BuildConfig.DEBUG) Log.d(TAG, "Navigated to $appToCheck — clearing block")
             blockedPackageName = null
             // Fall through to check if new app also has a limit
         }
 
-        if (packageName == applicationContext.packageName) return
+        if (appToCheck == applicationContext.packageName) return
 
-        if (isLauncher(packageName) || packageName == "com.android.settings") return
+        if (isLauncher(appToCheck) || appToCheck == "com.android.settings") return
 
-        checkLimitForPackage(packageName)
+        checkLimitForPackage(appToCheck)
     }
 
     private fun checkCurrentAppLimit() {
         // Tourne sur bgThread
+        
+        // Update currentForegroundApp with the actual foreground app to prevent
+        // stale state if an AccessibilityEvent was missed or overlay-based.
+        val realApp = getRealForegroundApp()
+        if (realApp != null && isLaunchableApp(realApp)) {
+            currentForegroundApp = realApp
+        }
+
         val pkg = currentForegroundApp ?: return
         if (blockedPackageName != null) return
         if (pkg == applicationContext.packageName) return
@@ -196,6 +214,48 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         return launchableApps!!.contains(packageName)
     }
 
+    private fun getRealForegroundApp(): String? {
+        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return null
+        val now = System.currentTimeMillis()
+        val start = now - USAGE_WINDOW_MS // 1 hour
+
+        return try {
+            val events = usageStatsManager.queryEvents(start, now)
+            val event = UsageEvents.Event()
+
+            val activeApps = mutableMapOf<String, Int>()
+            var lastForegroundApp: String? = null
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                // Filter out non-launchable system stuff if needed, but activeApps will tell us
+                // the real apps regardless.
+                when (event.eventType) {
+                    1, 7 -> { // MOVE_TO_FOREGROUND or ACTIVITY_RESUMED
+                        activeApps[event.packageName] = activeApps.getOrDefault(event.packageName, 0) + 1
+                        lastForegroundApp = event.packageName
+                    }
+                    2, 15 -> { // MOVE_TO_BACKGROUND or ACTIVITY_PAUSED
+                        val count = activeApps.getOrDefault(event.packageName, 0) - 1
+                        if (count <= 0) {
+                            activeApps.remove(event.packageName)
+                        } else {
+                            activeApps[event.packageName] = count
+                        }
+                    }
+                }
+            }
+
+            if (lastForegroundApp != null && activeApps.containsKey(lastForegroundApp)) {
+                lastForegroundApp
+            } else {
+                activeApps.keys.lastOrNull()
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun getUsageInLastHour(packageName: String): Long {
         val usageStatsManager =
             getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return 0
@@ -208,6 +268,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
             var totalForegroundMs = 0L
             var lastForegroundTime: Long? = null
             val event = UsageEvents.Event()
+            var activeCount = 0
 
             while (events.hasNextEvent()) {
                 events.getNextEvent(event)
@@ -216,21 +277,33 @@ class AppBlockerAccessibilityService : AccessibilityService() {
                 when (event.eventType) {
                     // MOVE_TO_FOREGROUND or ACTIVITY_RESUMED
                     1, 7 -> {
-                        lastForegroundTime = event.timeStamp
+                        if (activeCount == 0) {
+                            lastForegroundTime = event.timeStamp
+                        }
+                        activeCount++
                     }
                     // MOVE_TO_BACKGROUND or ACTIVITY_PAUSED
                     2, 15 -> {
-                        if (lastForegroundTime != null) {
-                            totalForegroundMs += event.timeStamp - lastForegroundTime
-                            lastForegroundTime = null
+                        if (activeCount > 0) {
+                            activeCount--
+                            if (activeCount == 0 && lastForegroundTime != null) {
+                                totalForegroundMs += event.timeStamp - lastForegroundTime!!
+                                lastForegroundTime = null
+                            }
+                        } else {
+                            // If first event is a background event, the app was in foreground before the window started
+                            totalForegroundMs += event.timeStamp - start
                         }
                     }
                 }
             }
 
             // If currently in foreground, count the ongoing session
-            if (lastForegroundTime != null) {
-                totalForegroundMs += now - lastForegroundTime
+            if (activeCount > 0 && lastForegroundTime != null) {
+                totalForegroundMs += now - lastForegroundTime!!
+            } else if (activeCount > 0) {
+                // If it was in foreground for the entire window
+                totalForegroundMs += now - start
             }
 
             totalForegroundMs / 1000 // Return seconds
