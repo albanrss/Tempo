@@ -14,18 +14,14 @@ void main() {
 
 Future<void> initNotifications() async {
   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  const androidInitializationSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
+  const androidInitializationSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const initializationSettings = InitializationSettings(
     android: androidInitializationSettings,
   );
-  await flutterLocalNotificationsPlugin.initialize(
-      settings: initializationSettings
-  );
+  await flutterLocalNotificationsPlugin.initialize(settings: initializationSettings);
 
   final androidPlugin = flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
   const alertChannel = AndroidNotificationChannel(
     NotificationConfig.alertChannelId,
