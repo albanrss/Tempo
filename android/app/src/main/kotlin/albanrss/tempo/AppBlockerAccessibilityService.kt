@@ -89,9 +89,6 @@ class AppBlockerAccessibilityService : AccessibilityService() {
             return
         }
 
-        // Mettre à jour l'app au premier plan (visible depuis tous les threads)
-        currentForegroundApp = packageName
-
         // Déléguer la vérification lourde (I/O) au thread de fond
         bgHandler.post { handleAppForeground(packageName) }
     }
@@ -100,6 +97,11 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         // Cette fonction tourne sur bgThread
 
         if (!isLaunchableApp(packageName)) return
+
+        // Only track launchable apps as the current foreground app so that
+        // background system services (e.g. GMS, SystemUI) cannot override it
+        // and cause the periodic check to miss the user-facing app's limit.
+        currentForegroundApp = packageName
 
         if (BuildConfig.DEBUG) Log.d(TAG, "Window changed → $packageName (blocked=$blockedPackageName)")
 
