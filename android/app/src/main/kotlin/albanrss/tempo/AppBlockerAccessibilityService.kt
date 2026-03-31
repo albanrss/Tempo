@@ -14,7 +14,6 @@ import android.os.HandlerThread
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import androidx.core.app.NotificationCompat
-import java.util.Calendar
 
 class AppBlockerAccessibilityService : AccessibilityService() {
 
@@ -26,6 +25,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         private const val PREFS_NAME = "FlutterSharedPreferences"
         private const val LIMIT_PREFIX = "flutter.time_limit_"
         private const val APP_NAME_PREFIX = "flutter.app_name_"
+        private const val USAGE_WINDOW_MS = 60 * 60 * 1000L // 1 hour
         private const val PERIODIC_CHECK_MS = 5000L // 5 seconds
         private const val ALERT_CHANNEL_ID = "app_limiter_channel"
         private const val ALERT_CHANNEL_NAME = "App Limiter"
@@ -89,9 +89,6 @@ class AppBlockerAccessibilityService : AccessibilityService() {
             return
         }
 
-        // Mettre à jour l'app au premier plan (visible depuis tous les threads)
-        currentForegroundApp = packageName
-
         // Déléguer la vérification lourde (I/O) au thread de fond
         bgHandler.post { handleAppForeground(packageName) }
     }
@@ -100,6 +97,11 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         // Cette fonction tourne sur bgThread
 
         if (!isLaunchableApp(packageName)) return
+
+        // Only track launchable apps as the current foreground app so that
+        // background system services (e.g. GMS, SystemUI) cannot override it
+        // and cause the periodic check to miss the user-facing app's limit.
+        currentForegroundApp = packageName
 
         if (BuildConfig.DEBUG) Log.d(TAG, "Window changed → $packageName (blocked=$blockedPackageName)")
 
@@ -149,7 +151,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         }
         if (limitMinutes <= 0) return
 
-        val usageSeconds = getUsageToday(packageName)
+        val usageSeconds = getUsageInLastHour(packageName)
         if (BuildConfig.DEBUG) Log.d(TAG, "$packageName: used ${usageSeconds}s / limit ${limitMinutes * 60}s")
 
         if (usageSeconds >= limitMinutes * 60) {
@@ -194,20 +196,15 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         return launchableApps!!.contains(packageName)
     }
 
-    private fun getUsageToday(packageName: String): Long {
+    private fun getUsageInLastHour(packageName: String): Long {
         val usageStatsManager =
             getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return 0
 
         val now = System.currentTimeMillis()
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        val startOfDay = cal.timeInMillis
+        val start = now - USAGE_WINDOW_MS
 
         return try {
-            val events = usageStatsManager.queryEvents(startOfDay, now)
+            val events = usageStatsManager.queryEvents(start, now)
             var totalForegroundMs = 0L
             var lastForegroundTime: Long? = null
             val event = UsageEvents.Event()
