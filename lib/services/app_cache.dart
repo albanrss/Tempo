@@ -57,18 +57,22 @@ class AppCache {
   }
 
   static String _serializeApps(List<AppInfo> apps) {
-    final list = apps.map((app) => {
-      'name': app.name,
-      'package_name': app.packageName,
-      'icon': app.icon != null ? base64Encode(app.icon!) : null,
-      'version_name': app.versionName,
-      'version_code': app.versionCode,
-      'platform_type': app.platformType.slug,
-      'installed_timestamp': app.installedTimestamp,
-      'is_system_app': app.isSystemApp,
-      'is_launchable_app': app.isLaunchableApp,
-      'category': app.category.value,
-    }).toList();
+    final list = apps
+        .map(
+          (app) => {
+            'name': app.name,
+            'package_name': app.packageName,
+            'icon': app.icon != null ? base64Encode(app.icon!) : null,
+            'version_name': app.versionName,
+            'version_code': app.versionCode,
+            'platform_type': app.platformType.slug,
+            'installed_timestamp': app.installedTimestamp,
+            'is_system_app': app.isSystemApp,
+            'is_launchable_app': app.isLaunchableApp,
+            'category': app.category.value,
+          },
+        )
+        .toList();
     return jsonEncode(list);
   }
 
