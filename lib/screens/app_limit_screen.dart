@@ -41,10 +41,7 @@ class _AppLimitScreenState extends State<AppLimitScreen> {
   Future<void> _setLimit() async {
     final navigator = Navigator.of(context);
 
-    await TimeLimitManager.setTimeLimit(
-      widget.app.packageName,
-      _selectedMinutes,
-    );
+    await TimeLimitManager.setTimeLimit(widget.app.packageName, _selectedMinutes);
 
     if (mounted) navigator.pop();
   }
@@ -68,6 +65,7 @@ class _AppLimitScreenState extends State<AppLimitScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(Strings.setLimitTitle(widget.app.name)),
+        scrolledUnderElevation: 0,
       ),
       body: Column(
         children: [
@@ -83,9 +81,7 @@ class _AppLimitScreenState extends State<AppLimitScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 64),
                       decoration: BoxDecoration(
                         border: Border.symmetric(
-                          horizontal: BorderSide(
-                            color: Colors.black.withValues(alpha: 0.15),
-                          ),
+                          horizontal: BorderSide(color: Colors.black.withValues(alpha: 0.15)),
                         ),
                       ),
                     ),
@@ -110,16 +106,12 @@ class _AppLimitScreenState extends State<AppLimitScreen> {
                               duration: const Duration(milliseconds: 150),
                               style: TextStyle(
                                 fontSize: isSelected ? 40 : 24,
-                                fontWeight: isSelected
-                                    ? FontWeight.w700
-                                    : FontWeight.w300,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w300,
                                 color: isSelected
                                     ? Colors.black
                                     : Colors.black.withValues(alpha: 0.30),
                               ),
-                              child: isSelected
-                                ? Text('$minute min')
-                                : Text('$minute'),
+                              child: isSelected ? Text('$minute min') : Text('$minute'),
                             ),
                           );
                         },
@@ -135,10 +127,7 @@ class _AppLimitScreenState extends State<AppLimitScreen> {
             padding: const EdgeInsets.only(bottom: 24),
             child: Text(
               Strings.limitDescription,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.black.withValues(alpha: 0.45),
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.black.withValues(alpha: 0.45)),
             ),
           ),
 
@@ -153,9 +142,7 @@ class _AppLimitScreenState extends State<AppLimitScreen> {
                       foregroundColor: Colors.black,
                       side: const BorderSide(color: Colors.black),
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: const Text(
                       Strings.removeLimitAction,
@@ -173,14 +160,9 @@ class _AppLimitScreenState extends State<AppLimitScreen> {
                       backgroundColor: Colors.black,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text(
-                      Strings.setLimitAction,
-                      style: TextStyle(fontSize: 15),
-                    ),
+                    child: const Text(Strings.setLimitAction, style: TextStyle(fontSize: 15)),
                   ),
                 ),
               ],
