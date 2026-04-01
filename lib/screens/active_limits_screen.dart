@@ -28,13 +28,23 @@ class _ActiveLimitsScreenState extends State<ActiveLimitsScreen> {
 
   Future<Map<String, int>> _getUsageInLastHour(Set<String> packages) async {
     final now = DateTime.now();
-    final oneHourAgo = now.subtract(const Duration(hours: 1));
+    final start = now.subtract(const Duration(hours: 1));
+    final startMs = start.millisecondsSinceEpoch;
+    final nowMs = now.millisecondsSinceEpoch;
 
     final usageMap = <String, int>{};
     try {
-      final events = await UsageStats.queryEvents(oneHourAgo, now);
+      final events = await UsageStats.queryEvents(start, now);
 
-      final lastForeground = <String, int>{};
+      final isForeground = <String, bool>{};
+      final seenFirstEvent = <String, bool>{};
+      final lastForegroundTime = <String, int>{};
+
+      for (final pkg in packages) {
+        usageMap[pkg] = 0;
+        isForeground[pkg] = false;
+        seenFirstEvent[pkg] = false;
+      }
 
       for (final event in events) {
         final pkg = event.packageName;
@@ -44,25 +54,39 @@ class _ActiveLimitsScreenState extends State<ActiveLimitsScreen> {
         final type = int.tryParse(event.eventType ?? '');
         if (type == null) continue;
 
-        switch (type) {
-          case 1: // MOVE_TO_FOREGROUND
-          case 7: // ACTIVITY_RESUMED
-            lastForeground[pkg] = timestamp;
-            break;
-          case 2: // MOVE_TO_BACKGROUND
-          case 15: // ACTIVITY_PAUSED
-            final start = lastForeground[pkg];
-            if (start != null) {
-              usageMap[pkg] = (usageMap[pkg] ?? 0) + (timestamp - start);
-              lastForeground.remove(pkg);
+        if (type == 1) {
+          // Foreground
+          if (isForeground[pkg] != true) {
+            isForeground[pkg] = true;
+            lastForegroundTime[pkg] = timestamp;
+          }
+          seenFirstEvent[pkg] = true;
+        } else if (type == 2 || type == 23 || type == 24) {
+          // Background
+          if (isForeground[pkg] == true) {
+            isForeground[pkg] = false;
+            final lastTime = lastForegroundTime[pkg];
+            if (lastTime != null) {
+              usageMap[pkg] = (usageMap[pkg] ?? 0) + (timestamp - lastTime);
+              lastForegroundTime.remove(pkg);
             }
-            break;
+          } else if (seenFirstEvent[pkg] != true) {
+            // App was already in background but was in foreground before window started
+            usageMap[pkg] = (usageMap[pkg] ?? 0) + (timestamp - startMs);
+          }
+          seenFirstEvent[pkg] = true;
         }
       }
 
-      final nowMs = now.millisecondsSinceEpoch;
-      for (final entry in lastForeground.entries) {
-        usageMap[entry.key] = (usageMap[entry.key] ?? 0) + (nowMs - entry.value);
+      for (final pkg in packages) {
+        if (isForeground[pkg] == true) {
+          final lastTime = lastForegroundTime[pkg];
+          if (lastTime != null) {
+            usageMap[pkg] = (usageMap[pkg] ?? 0) + (nowMs - lastTime);
+          } else {
+            usageMap[pkg] = (usageMap[pkg] ?? 0) + (nowMs - startMs);
+          }
+        }
       }
     } catch (_) {}
 
