@@ -26,9 +26,22 @@ class _ActiveLimitsScreenState extends State<ActiveLimitsScreen> {
     _loadLimits();
   }
 
-  Future<Map<String, int>> _getUsageInLastHour(Set<String> packages) async {
+  Future<Map<String, int>> _getUsageInLastHour(
+    Set<String> packages,
+    SharedPreferences prefs,
+  ) async {
     final now = DateTime.now();
     final oneHourAgo = now.subtract(const Duration(hours: 1));
+
+    // Read forced-background timestamps recorded by the accessibility service.
+    // These allow us to cap "still-open" sessions that the OS has not yet closed
+    // in UsageStatsManager (which can lag behind when the service forcibly sends
+    // an app to background).
+    final forcedBgTimes = <String, int>{};
+    for (final pkg in packages) {
+      final t = prefs.getInt('${StorageKeys.forcedBgPrefix}$pkg');
+      if (t != null) forcedBgTimes[pkg] = t;
+    }
 
     final usageMap = <String, int>{};
     try {
@@ -60,9 +73,19 @@ class _ActiveLimitsScreenState extends State<ActiveLimitsScreen> {
         }
       }
 
+      // For sessions that appear still open, cap at the forced-background time
+      // (if one was recorded and falls after the session started) to avoid
+      // inflating usage when UsageStatsManager has not yet written the
+      // BACKGROUND event after a forced eviction.
       final nowMs = now.millisecondsSinceEpoch;
       for (final entry in lastForeground.entries) {
-        usageMap[entry.key] = (usageMap[entry.key] ?? 0) + (nowMs - entry.value);
+        final pkg = entry.key;
+        final sessionStart = entry.value;
+        final forcedBg = forcedBgTimes[pkg];
+        final cappedNow = (forcedBg != null && forcedBg > sessionStart && forcedBg <= nowMs)
+            ? forcedBg
+            : nowMs;
+        usageMap[pkg] = (usageMap[pkg] ?? 0) + (cappedNow - sessionStart);
       }
     } catch (_) {}
 
@@ -92,7 +115,7 @@ class _ActiveLimitsScreenState extends State<ActiveLimitsScreen> {
       limitsRaw[packageName] = minutes;
     }
 
-    final usageMap = await _getUsageInLastHour(packageNames);
+    final usageMap = await _getUsageInLastHour(packageNames, prefs);
 
     final entries = <_LimitedAppEntry>[];
     for (final packageName in packageNames) {

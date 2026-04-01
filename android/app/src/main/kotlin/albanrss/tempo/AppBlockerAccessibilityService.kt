@@ -32,6 +32,7 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         private const val ALERT_CHANNEL_DESCRIPTION = "Notifications for app usage limits"
         // TTL du cache des apps launchable/launcher (10 minutes)
         private const val APPS_CACHE_TTL_MS = 10 * 60 * 1000L
+        private const val FORCED_BG_PREFIX = "flutter.forced_bg_"
     }
 
     // Thread dédié aux opérations lourdes (queryEvents, SharedPreferences)
@@ -51,6 +52,11 @@ class AppBlockerAccessibilityService : AccessibilityService() {
 
     // Accédé uniquement depuis bgThread
     private val notifiedSoonPackages = mutableSetOf<String>()
+
+    // Timestamps (ms) at which each package was forcibly sent to background.
+    // Used to cap ongoing-session calculation in getUsageInLastHour() when the
+    // OS has not yet written the corresponding BACKGROUND event to UsageStatsManager.
+    private val forcedBackgroundTimes = mutableMapOf<String, Long>()
 
     private val periodicCheck = object : Runnable {
         override fun run() {
@@ -177,6 +183,12 @@ class AppBlockerAccessibilityService : AccessibilityService() {
             if (BuildConfig.DEBUG) Log.d(TAG, "BLOCKING $appName (used ${usageSeconds}s >= ${limitMinutes * 60}s)")
             blockedPackageName = packageName
             notifiedSoonPackages.remove(packageName)
+            // Record the forced-background timestamp so that getUsageInLastHour() can cap
+            // any still-open session even if UsageStatsManager has not yet written the
+            // BACKGROUND event (which can be delayed by the OS).
+            val blockedAtMs = System.currentTimeMillis()
+            forcedBackgroundTimes[packageName] = blockedAtMs
+            prefs.edit().putLong("$FORCED_BG_PREFIX$packageName", blockedAtMs).apply()
             goToHomeScreen()
             showLimitNotification(appName, usageSeconds)
         } else if (limitMinutes * 60 - usageSeconds <= 60) {
@@ -263,6 +275,9 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
         val start = now - USAGE_WINDOW_MS
 
+        // Drop entries that have aged out of the window to avoid unbounded growth.
+        forcedBackgroundTimes.entries.removeIf { it.value < start }
+
         return try {
             val events = usageStatsManager.queryEvents(start, now)
             var totalForegroundMs = 0L
@@ -298,12 +313,19 @@ class AppBlockerAccessibilityService : AccessibilityService() {
                 }
             }
 
-            // If currently in foreground, count the ongoing session
+            // If the session still appears open (no matching BACKGROUND event), the OS may not
+            // have written it yet — this happens when the app was forcibly sent home by this
+            // service.  Cap the ongoing session at the recorded forced-background time so we do
+            // not inflate the usage counter with time the user never actually spent in the app.
             if (activeCount > 0 && lastForegroundTime != null) {
-                totalForegroundMs += now - lastForegroundTime!!
+                val forcedBgTime = forcedBackgroundTimes[packageName]
+                    ?.takeIf { it > lastForegroundTime!! && it <= now }
+                totalForegroundMs += (forcedBgTime ?: now) - lastForegroundTime!!
             } else if (activeCount > 0) {
-                // If it was in foreground for the entire window
-                totalForegroundMs += now - start
+                // App was already in foreground when the window started
+                val forcedBgTime = forcedBackgroundTimes[packageName]
+                    ?.takeIf { it in start..now }
+                totalForegroundMs += (forcedBgTime ?: now) - start
             }
 
             totalForegroundMs / 1000 // Return seconds

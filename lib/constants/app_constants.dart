@@ -3,6 +3,7 @@ class StorageKeys {
 
   static const String timeLimitPrefix = 'time_limit_';
   static const String appNamePrefix = 'app_name_';
+  static const String forcedBgPrefix = 'forced_bg_';
 }
 
 class NotificationConfig {
