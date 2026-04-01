@@ -231,11 +231,11 @@ class AppBlockerAccessibilityService : AccessibilityService() {
                 // Filter out non-launchable system stuff if needed, but activeApps will tell us
                 // the real apps regardless.
                 when (event.eventType) {
-                    1, 7 -> { // MOVE_TO_FOREGROUND or ACTIVITY_RESUMED
+                    1 -> { // MOVE_TO_FOREGROUND or ACTIVITY_RESUMED
                         activeApps[event.packageName] = activeApps.getOrDefault(event.packageName, 0) + 1
                         lastForegroundApp = event.packageName
                     }
-                    2, 15 -> { // MOVE_TO_BACKGROUND or ACTIVITY_PAUSED
+                    2, 23, 24 -> { // MOVE_TO_BACKGROUND, ACTIVITY_STOPPED, ACTIVITY_DESTROYED
                         val count = activeApps.getOrDefault(event.packageName, 0) - 1
                         if (count <= 0) {
                             activeApps.remove(event.packageName)
@@ -268,7 +268,8 @@ class AppBlockerAccessibilityService : AccessibilityService() {
             var totalForegroundMs = 0L
             var lastForegroundTime: Long? = null
             val event = UsageEvents.Event()
-            var activeCount = 0
+            var isForeground = false
+            var seenFirstEvent = false
 
             while (events.hasNextEvent()) {
                 events.getNextEvent(event)
@@ -276,33 +277,35 @@ class AppBlockerAccessibilityService : AccessibilityService() {
 
                 when (event.eventType) {
                     // MOVE_TO_FOREGROUND or ACTIVITY_RESUMED
-                    1, 7 -> {
-                        if (activeCount == 0) {
+                    1 -> {
+                        if (!isForeground) {
+                            isForeground = true
                             lastForegroundTime = event.timeStamp
                         }
-                        activeCount++
+                        seenFirstEvent = true
                     }
-                    // MOVE_TO_BACKGROUND or ACTIVITY_PAUSED
-                    2, 15 -> {
-                        if (activeCount > 0) {
-                            activeCount--
-                            if (activeCount == 0 && lastForegroundTime != null) {
+                    // MOVE_TO_BACKGROUND, ACTIVITY_STOPPED, ACTIVITY_DESTROYED
+                    2, 23, 24 -> {
+                        if (isForeground) {
+                            isForeground = false
+                            if (lastForegroundTime != null) {
                                 totalForegroundMs += event.timeStamp - lastForegroundTime!!
                                 lastForegroundTime = null
                             }
-                        } else {
+                        } else if (!seenFirstEvent) {
                             // If first event is a background event, the app was in foreground before the window started
                             totalForegroundMs += event.timeStamp - start
                         }
+                        seenFirstEvent = true
                     }
                 }
             }
 
             // If currently in foreground, count the ongoing session
-            if (activeCount > 0 && lastForegroundTime != null) {
+            if (isForeground && lastForegroundTime != null) {
                 totalForegroundMs += now - lastForegroundTime!!
-            } else if (activeCount > 0) {
-                // If it was in foreground for the entire window
+            } else if (isForeground) {
+                // If it was in foreground for the entire window and no foreground event was in the window
                 totalForegroundMs += now - start
             }
 
